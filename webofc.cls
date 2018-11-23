@@ -16,8 +16,8 @@
 %%   Right bracket \]     Circumflex    \^     Underscore    \_
 %%   Grave accent  \`     Left brace    \{     Vertical bar  \|
 %%   Right brace   \}     Tilde         \~}
-\def\filedate{2016/04/05}
-\def\fileversion{2.0}
+\def\filedate{2018/11/12}
+\def\fileversion{0.0}
 \NeedsTeXFormat{LaTeX2e}[1995/12/01]
 \ProvidesClass{webofc}
               [\filedate\space v\fileversion\space
