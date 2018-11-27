@@ -9,10 +9,10 @@
 
 \usepackage[varg]{txfonts}   % Web of Conferences font
 
-\newminted{cpp}{gobble=2,linenos=0, mathescape, numbersep=5pt, frame=lines, framesep=2mm, baselinestretch=1, fontsize=\footnotesize}
+\newminted{cpp}{gobble=2,linenos=0, mathescape, numbersep=3pt, frame=lines, framesep=2mm, baselinestretch=1, fontsize=\scriptsize}
 \newmintinline{cpp}{}
 
-\newminted{bash}{gobble=2,linenos=0, mathescape, numbersep=5pt, frame=lines, framesep=2mm, baselinestretch=1, fontsize=\footnotesize}
+\newminted{bash}{gobble=2,linenos=0, mathescape, numbersep=3pt, frame=lines, framesep=2mm, baselinestretch=1, fontsize=\scriptsize}
 \newmintinline{bash}{}
 
 \usetikzlibrary{shadows, arrows, fit, positioning, matrix, shapes}
@@ -69,7 +69,6 @@
             
             %\input{./Figures/TikzCommon} % common tikz styles for the thesis
 
-
 \begin{document}
 
 \title{Optimizing Frameworks’ Performance Using C++ Modules Aware ROOT}
@@ -88,20 +87,32 @@
         \fnsep\thanks{\email{isemann@student.chalmers.se}}
 }
 
-\institute{Princeton University \and CERN \and UNL \and Chalmers University of Technology}
-
+\institute{Princeton University, Princeton, New Jersey 08544, United States
+\and
+           CERN, Meyrin, Switzerland
+\and
+           University of Nebraska Lincoln, 1400 R St, Lincoln, NE 68588, United States
+\and
+           Chalmers University of Technology, Chalmersplatsen 4, 41296 Göteborg, Sweden
+          }
+          
 \abstract{%
-We will present our results and challenges with C++ modules in ROOT. ROOT was extended with experimental support for using C++ modules during runtime, with aims to reduce its memory usage and improve its correctness. C++ Modules is a mechanism to boost {\it compilation} time. {\it Compilation time} for other software turns into {\it runtime} for ROOT as it's using Cling C++ {\it interpreter}. 
+We will present our results and challenges with C++ modules in ROOT. ROOT was extended with experimental support for using C++ modules during runtime, with aims to reduce its memory usage and improve its correctness. C++ Modules is a mechanism to boost  compilation time. Compilation time for other software turns into runtime for ROOT as it's using Cling C++ interpreter. 
 
 This paper shows the status of the C++ Modularization in ROOT and CMSSW. It argues for a bottom-up adoption approach and outlines a set of tools to aid the process. The authors share performance results and implementation experience gained from ROOT adaptation of C++ Module and from migrating CMSSW and its dependencies.
+
+
+%The LLVM community advances its C++ Modules technology providing an io-efficient, on-disk code representation capable of reducing build times and peak memory usage. Significant amount of efforts were invested in teaching ROOT and its toolchain to operate with clang's implementation of the C++ Modules. Currently, C++ Modules files are used by: cling to avoid header re-parsing; rootcling to store io information in a cross-platform way; and ROOT's reflection layer to implement implicit and explicit runtime shared library loading.
+
+%ROOT builds and works with C++ Modules in its dictionary system showing promising performance. The conducted work paved our way for optimizing experiments' software stacks to achieve performance even beyond the observed in ROOT. The new technology adds three new requirements. First, every dictionary header needs to be parsable on its own. Secondly, it should not depend on outside macro definitions which can alter its content. Thirdly, all its direct or indirect includes should be also in a C++ Module. This talk shows the status of the C++ Modularization in ROOT and CMSSW. It argues for a bottom-up adoption approach and outlines a set of tools to aid the process. The authors share performance results and implementation experience gained when migrating CMSSW and its dependencies such as HepMC, Geant and boost.
 }
 %
 \maketitle
 %
 \section{Introduction}
 \label{intro}
-
-The LLVM community advances its C++ Modules technology providing an io-efficient, on-disk code representation capable of reducing build times and peak memory usage. Significant amount of efforts were invested in teaching ROOT and its toolchain to operate with clang's implementation of the C++ Modules. Currently, C++ Modules files are used by: cling to avoid header re-parsing; rootcling to store io information in a cross-platform way; and ROOT's reflection layer to implement implicit and explicit runtime shared library loading. [TODO CITE CHEP2016 paper?]
+Phrase from ACAT 2017
+The LLVM community advances its C++ Modules technology providing an I/O efficient, on-disk code representation capable of reducing build times and peak memory usage. Significant amount of efforts were invested in teaching ROOT and its toolchain to operate with clang's implementation of the C++ Modules. Currently, C++ Modules files are used by: cling to avoid header re-parsing; rootcling to store io information in a cross-platform way; and ROOT's reflection layer to implement implicit and explicit runtime shared library loading. [TODO CITE ACAT2016 paper?]
 
 ROOT builds and works with C++ Modules in its dictionary system showing promising performance. The conducted work paved our way for optimizing experiments' software stacks to achieve performance even beyond the observed performance in ROOT. The new technology adds three new requirements. First, every dictionary header needs to be parsable on its own. Secondly, it should not depend on outside macro definitions which can alter its content. Thirdly, all its direct or indirect includes should be also in a C++ Module.
 
@@ -109,15 +120,28 @@ ROOT has several features which interact with libraries and require implicit hea
 
 This paper is structured in six sections. First, we would like to explain a background knowledge and a motivation of this project. Next, we would like to dive into a detail of our implementation in ROOT. We'll show the result in section \ref{results}, and present our conclusion and future work.
 
+%This paper is structured into five sections: section 2, Background, makes a brief overview of
+%the C++ Modules technology and its implementation in the Clang compiler; section 3, Improving
+%ROOT’s Runtime Performance Step by Step, proposes an incremental adoption strategy; section
+%4, Preliminary Performance Results, presents some direct and indirect benefits of using the
+%feature; section 5, Conclusion & Future Work, concludes and outlines a future work plan.
+
+
 \section{Background}
 \label{background}
 
-In this section we will explain the mechanism of three current performance optimization in ROOT. PCH, ROOTMAP, and RDICT. their drawbacks when compared with modules.
+In this section we will explain the mechanism of three current performance optimizations in ROOT: ROOT precompiled header (PCH), rootmap file (ROOTMAP), and ROOT file with I/O specific information (RDICT) and their drawbacks compared with C++ modules (PCMs).
 
 \subsection{Existing header parsing implementation: PCH}
 \label{pch}
 
-In Figure \ref{fig:pchandpcm}, we show two different header parsing optimization, PCH and C++ modules. The ROOT precompiled header (PCH) reduces the CPU and memory cost for ROOT’s most used libraries. The precompiled header technology is well-understood since decades. It is an efficient on-disk representation of the state of the compiler after parsing a set of headers. It can be loaded before starting the next instance to avoid doing redundant work. At build time, rootcling (ROOT’s dictionary generator) creates one PCH file which is attached at ROOT startup time. It's major drawback is the fact that if third-party users want to include their libraries, they have to recompile PCH every time there is a change in one of header files, which is too expensive. Modules solve this drawback, as it's separable.
+Beyond performance optimizations, it is important to stress out existing header parsing techniques in ROOT: PCH and C++ modules (PCMs) (Figure \ref{fig:pchandpcm}).
+
+The ROOT precompiled header (PCH) reduces the CPU and memory cost for ROOT’s heavily used libraries. The precompiled header technology is well-understood since decades. It is an efficient on-disk representation of the state of the compiler after parsing a set of headers. It can be loaded before starting the next instance to avoid doing redundant work. At build time, rootcling (ROOT’s dictionary generator) creates one PCH file which is attached at ROOT startup time.
+
+PCM?????????????
+
+Major drawback of PCH is the fact that if third-party users want to include their libraries, they have to recompile PCH every time any header file was changed, which becomes an expensive operation. C++ modules solve this drawback, as they are separable by design.
 
 \begin{figure}[!h]
   \centering
@@ -150,18 +174,20 @@ In Figure \ref{fig:pchandpcm}, we show two different header parsing optimization
     \node [below=1cm, align=flush center,text width=8cm] at (interpreter) { PCM (C++ Modules) };
 
   \end{tikzpicture}
-  \caption{Comparison of PCH and C++ Modules}
+  \caption{Comparison of PCH and C++ Modules in ROOT}
   \label{fig:pchandpcm}
 \end{figure}
 
 \subsection{Existing performance optimization in ROOT: ROOTMAP and RDICT}
 \label{dictgen}
 
-Here we will briefly describe two common layers of the optimization: ROOTMAP and RDICT.
+%Here we will briefly describe two common layers of the optimization: ROOTMAP and RDICT.
 
-RDICT files store some useful information (in particular about class offsets) in ROOT files to avoid the potentially expensive call to the interpreter if the information is not the PCH. For example, ROOT’s {\it libGeom} and other third-party code. This is done to circumvent the costly call to {\it ShowMembers} which will require parsing.
+ROOTMAP files reduce parsing for code which is not in the PCH. RDICT files store some useful information, particularly about class offsets in ROOT files to avoid the potentially expensive call to the interpreter if the information is not the PCH. 
 
-ROOTMAP files reduce parsing for code which is not in the PCH. Consider {\it foo::bar} and {\it S} are defined in {\it libFoo}'s {\it Foo.h} shown in Listing \ref{list:foo}.
+%...for example, ROOT’s {\it libGeom} and other third-party code.
+
+%This is done to circumvent the costly call to {\it ShowMembers} which will require parsing.
 
 \begin{listing}[h]
     \noindent
@@ -193,7 +219,7 @@ ROOTMAP files reduce parsing for code which is not in the PCH. Consider {\it foo
         }
     \end{cppcode*}
     \end{minipage}
-    \caption{C++ header {\it Foo.h} for libFoo library, {\it libFoo.rootmap} written for libFoo library, and {\it G\_\_Foo.cxx} generated to insert forward declaration to ROOT when the libFoo library was loaded.}
+    \caption{C++ header {\it Foo.h} for {\it libFoo} library, {\it libFoo.rootmap} written for libFoo library, and {\it G\_\_Foo.cxx} generated to insert forward declaration to ROOT when the libFoo library was loaded.}
     \label{list:foo}
 \end{listing}
 
@@ -201,13 +227,13 @@ ROOTMAP files reduce parsing for code which is not in the PCH. Consider {\it foo
     \noindent
     \begin{minipage}[h]{.7\textwidth}
     \begin{cppcode*}{}
-    // ROOT prompt
-    root [] S *s;           // #1: does not require a definition.
-    root [] foo::bar *baz1; // #2: does not require a definition.
-    root [] foo::bar baz2;  // #3: requires a definition.
+    // ROOT Prompt
+    1 root [] S *s;           // Does not require a definition. 
+    2 root [] foo::bar *baz1; // Does not require a definition.
+    3 root [] foo::bar baz2;  // Requires a definition.
     \end{cppcode*}
     \end{minipage}
-    \caption{Example of the efforts which ROOT does to avoid parsing redundant code.}
+    \caption{Example of the efforts which ROOT does to avoid parsing redundant code. Consider {\it foo::bar} and {\it S} are defined in {\it libFoo}'s {\it Foo.h} shown in Listing \ref{list:foo}.}
     \label{list:prompt}
 \end{listing}
 
@@ -392,7 +418,7 @@ With runtime C++ modules, it iterates through libraries found in LD\_LIBRARY\_PA
 \label{fig:performance2}
 \end{figure}
 
-Figure \ref{fig:performance1} and figure \ref{fig:performance2} are the performance results we receive from modules, compared to PCH and textual headers which is synthetic benchmarks close to the experiment software stacks.
+Figure \ref{fig:performance1} and Figure \ref{fig:performance2} are the performance results we receive from modules, compared to PCH and textual headers which is synthetic benchmarks close to the experiment software stacks.
 
 Memory footprint – mostly due to importing all C++ Modules at startup
 we see overhead which depends on the number of preloaded modules. For
@@ -411,7 +437,7 @@ the performance of the technology preview with respect to ‘standard’ ROOT.
 \subsection{Correctness Results}
 \label{correctness}
 
-Runtime Modules are supporting more features than PCH. For example, gMinuit is an extern variable which cannot be autoloaded by ROOT at the moment.
+Runtime Modules are supporting more features than PCH. For example (FIGURE? ....), gMinuit is an extern variable which cannot be autoloaded by ROOT at the moment.
 However, with modules, we can automatically resolve symbols and cases like those are now correctly handled.
 
 \begin{listing}[h]
@@ -438,6 +464,7 @@ However, with modules, we can automatically resolve symbols and cases like those
 
 
 \section{Limitations}
+.....
 \begin{itemize}
 \item Incremental builds: building ROOT, modifying the source code and rebuilding might not work. To work around it remove all pcm files in the ROOTSYS/lib folder.
 
