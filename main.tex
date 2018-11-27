@@ -112,90 +112,10 @@ This paper is structured in six sections. First, we would like to explain a back
 \section{Background}
 \label{background}
 
-There are three header parsing implementation in the market [TODO:seems jargon please reword]. Textual Include, PCH, and modules. In this section we will explain the mechanism of Textual Include and PCH, their drawbacks when compared with modules.
+In this section we will explain the mechanism of three current performance optimization in ROOT. PCH, ROOTMAP, and RDICT. their drawbacks when compared with modules.
 
-\subsection{Existing header parsing implementation: Textual Include and PCH}
-\label{tandpch}
-
-\subsubsection{Textual Include}
-
-TODO: Remove Figure1 it does not show a lot and it occupies a lot of space.
-
-In C/C++, the interface of a library is accessed by including the appropriate header files, which is a heritage from C. It is flexible but can cause well-known problems, such as lacking of compile-time scalability and fragility.
-
-\begin{itemize}
-    \item \textbf{Compile-time scalability:}
-    \#include is copying the header contents to the includer's code. Thus the parser has to reparse the same common header files multiple times, which is expensive. As is illustrated in Figure \ref{fig:textual_include}, when one header was included to different cxx file, it needs to be parsed again by a compiler the number of the times it was included. Also, as shown in Listing \ref{list:expansion-of-textual-include}, the textual include can explode your object file by copy pasting the contents form the header.
-    
-\begin{figure}
-\centering
-    \begin{minipage}{.3\textwidth}
-    \subfloat[] {\label{fig:perfBuildingROOT:a} \includegraphics[width=\textwidth]{tinc_image.png}}
-    \end{minipage}
-\caption{One header file being parsed multiple times when included to different cxx files.}
-\label{fig:textual_include}
-
-\end{figure}
-    \begin{listing}[h]
-    \noindent
-    \begin{minipage}[h]{.45\textwidth}
-    \begin{cppcode*}{}
-    #include "TVirtualPad.h"
-    #include <vector>
-    #include <set>
-
-    int main(){...}
-    \end{cppcode*}
-    \end{minipage}\hfill
-    \begin{minipage}[h]{.52\textwidth}
-    \begin{cppcode*}
-    # 286 "/usr/include/c++/v1/vector" 2 3
-    namespace std { inline namespace __1 {
-    template <bool> class __vector_base_common {
-       __attribute__ ((__visibility__("hidden"),
-       __always_inline__))
-       __vector_base_common() {}
-    ...
-    # 394 "/usr/include/c++/v1/set" 3
-    namespace std {inline namespace __1 {
-    template <...> class set {
-    public:
-        typedef _Key key_type;
-
-    int main() {...}
-    \end{cppcode*}
-    \end{minipage}
-    \caption{Example of expansion of textual include: Right hand side is a C++ code of a user, and left hand side is a preprocessed C++ code which will be compiled afterwards.}
-    \label{list:expansion-of-textual-include}
-\end{listing}
-
-    \item \textbf{Fragility:} Textual includes are influenced by previously defined macros.
-    As shown in Listing \ref{list:fragility}, macro PI is \#defined in Rcpp library. Including this library while using local variable PI will end up in a redefinition error. It can break users' code unexpectedly, and the error message will be not understandable.
-    
-\begin{listing}[h]
-    \noindent
-    \begin{minipage}[h]{.48\textwidth}
-    \begin{cppcode*}{}
-    // header.h
-    #define PI 3.14
-    ...
-    \end{cppcode*}
-    \end{minipage}\hfill
-    \begin{minipage}[h]{.48\textwidth}
-    \begin{cppcode*}{}
-    #include <header.h>
-    ...
-    double PI = 3.14;
-    // => double 3.14 = 3.14;
-    \end{cppcode*}
-    \end{minipage}
-    \caption{Fragility: When you have a code like left hand side in one of the header and would like to use it from your code on the right hand side, preprocessor will destroy your local variable by replacing it to 3.14, as it's defined in {\it header.h}.}
-    \label{list:fragility}
-\end{listing}
-
-\end{itemize}
-
-\subsubsection{PCH}
+\subsection{Existing header parsing implementation: PCH}
+\label{pch}
 
 In Figure \ref{fig:pchandpcm}, we show two different header parsing optimization, PCH and C++ modules. The ROOT precompiled header (PCH) reduces the CPU and memory cost for ROOT’s most used libraries. The precompiled header technology is well-understood since decades. It is an efficient on-disk representation of the state of the compiler after parsing a set of headers. It can be loaded before starting the next instance to avoid doing redundant work. At build time, rootcling (ROOT’s dictionary generator) creates one PCH file which is attached at ROOT startup time. It's major drawback is the fact that if third-party users want to include their libraries, they have to recompile PCH every time there is a change in one of header files, which is too expensive. Modules solve this drawback, as it's separable.
 
@@ -456,18 +376,23 @@ With runtime C++ modules, it iterates through libraries found in LD\_LIBRARY\_PA
     \begin{minipage}{.48\textwidth}
     \subfloat[] {\label{fig:perfBuildingROOT:a} \includegraphics[width=\textwidth]{Short_RSS.png}}
  　 \end{minipage}
-        
-    \begin{minipage}{.48\textwidth}
-    \subfloat[] {\label{fig:perfBuildingROOT:a} \includegraphics[width=\textwidth]{Startup_RSS.png}}
- 　 \end{minipage}\hfill
-    \begin{minipage}{.48\textwidth}
-    \subfloat[] {\label{fig:perfBuildingROOT:a} \includegraphics[width=\textwidth]{Startup_CPU.png}}
- 　 \end{minipage}
-\caption{Performance results: (a), (c), (f) are the measurement of CPU time. (b), (d), (e) are the measurement of RSS. (a), (b) are measuring long tests (over 30 seconds) in ROOT with and without runtime C++ modules. (c), (d) are measuring short tests which is not PCH-nized. (e), (f) are the startup time of ROOT and hsimple tutorial, which are the basic benchmarks.}
-\label{fig:performance}
+\caption{Performance results: (a), (c) are the measurement of CPU time. (b), (d) are the measurement of RSS. (a), (b) are measuring long tests (over 30 seconds) in ROOT with and without runtime C++ modules. (c), (d) are measuring short tests which is not PCH-nized.}
+\label{fig:performance1}
 \end{figure}
 
-Figure \ref{fig:performance} are the performance results we receive from modules, compared to PCH and textual headers which is synthetic benchmarks close to the experiment software stacks.
+\begin{figure}
+\centering
+    \begin{minipage}{.48\textwidth}
+    \subfloat[] {\label{fig:perfBuildingROOT:a} \includegraphics[width=\textwidth]{Startup_CPU.png}}
+ 　 \end{minipage}\hfill
+    \begin{minipage}{.48\textwidth}
+    \subfloat[] {\label{fig:perfBuildingROOT:a} \includegraphics[width=\textwidth]{Startup_RSS.png}}
+ 　 \end{minipage}
+\caption{Performance results: (a), (b) are the startup time of ROOT and hsimple tutorial, which are the basic benchmarks.}
+\label{fig:performance2}
+\end{figure}
+
+Figure \ref{fig:performance1} and figure \ref{fig:performance2} are the performance results we receive from modules, compared to PCH and textual headers which is synthetic benchmarks close to the experiment software stacks.
 
 Memory footprint – mostly due to importing all C++ Modules at startup
 we see overhead which depends on the number of preloaded modules. For
@@ -540,7 +465,7 @@ The authors would like to thank CERN/EP-SFT and the ROOT team in particular.
 
 \begin{thebibliography}{}
 
-\bibitem{Vpaper}
+\bibitem{vassil-paper}
 Vassil Vassilev, J. Phys.: Conf. Ser. \textbf{898}, 072023 (2017)
 
 \bibitem{clang-modules-doc}
