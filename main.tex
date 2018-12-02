@@ -98,7 +98,8 @@
 }
 
 \abstract{%
-HEP software frameworks have always strove for performance. ROOT is a core framework which is used broadly in HEP and in outside HEP. The performance of Cling C++ interpreter, which serves as a back-end of ROOT consumes large amount of resources when executing ROOT. ROOT was extended with experimental support for using C++ modules during runtime, which is being implemented in Clang with aims to reduce its compilation time. However, within ROOT, compilation time turns into runtime as it's using Cling C++ interpreter. This paper presents the results and challenges with C++ modules in ROOT and its early adoption to CMSSW.
+HEP software frameworks have always strove for performance, and ROOT is a core framework which is used broadly in and outside HEP.
+The use of its C++ interpreter \texttt{cling} in external frameworks introduces potential parsing overhead. ROOT was extended with experimental support for using C++ modules during runtime to decrease the performance impact of parsing. TODO: FIX. However, within ROOT, compilation time turns into runtime as it's using Cling C++ interpreter. This paper presents the results and challenges with C++ modules in ROOT and its early adoption to CMSSW.
 }
 %
 \maketitle
@@ -106,29 +107,29 @@ HEP software frameworks have always strove for performance. ROOT is a core frame
 \section{Introduction}
 \label{intro}
 
-%C++ Modules technology, gives an efficient serialization, on-disk header representation. Significant amount of efforts were invested in teaching ROOT and its toolchain to operate with clang's implementation of the C++ Modules. Currently, C++ Modules files are used by: cling to avoid header re-parsing; rootcling to store io information in a cross-platform way; and ROOT's reflection layer to implement implicit and explicit runtime shared library loading.
+TODO: What is that -> "The conducted work" paved our way for optimizing experiments' software stacks to achieve performance even beyond the observed performance in ROOT. The new technology adds three new requirements to user code. First, every dictionary header needs to be parsable on its own. Secondly, it should not depend on outside macro definitions which can alter its content. Thirdly, all its direct or indirect includes should be also in a C++ Module~\cite{vassil-paper}.
 
-The conducted work paved our way for optimizing experiments' software stacks to achieve performance even beyond the observed performance in ROOT. The new technology adds three new requirements. First, every dictionary header needs to be parsable on its own. Secondly, it should not depend on outside macro definitions which can alter its content. Thirdly, all its direct or indirect includes should be also in a C++ Module~\cite{vassil-paper}.
+TODO: What's this -> ROOT builds and works with C++ Modules. ROOT version 6.16 has a technology preview of the feature.
 
-ROOT builds and works with C++ Modules. ROOT version 6.16 will have a technology preview of the feature.
-
-ROOT has several features which interact with libraries and require implicit header inclusion. This can be triggered by reading or writing data on disk, or user actions at the prompt. Often, the headers are immutable and re-parsing is redundant. C++ Modules are designed to minimize the re-parsing of the same header content by providing an efficient on-disk representation of C++ code.
-
-This paper expands the work conducted and described in the previous publication~\cite{vassil-paper}. This paper is structured in six sections: section \ref{background}, Background, makes a overview of optimization in current ROOT and gives a comparison with C++ Modules; section \ref{implementation}, Implementation, gives a explanation how we implemented runtime C++ modules in ROOT; section \ref{results}, Results, show the performance results and correctness results which gives a motivation for experiments to start using runtime C++ modules; section \ref{limitationsandfuture}, Limitations and future works, explains the limitation of current implementation and explains future works!
+ROOT has several features which interact with libraries and require implicit header inclusion. This can be triggered by reading or writing data on disk, or user actions at the prompt. Often, the headers are immutable and re-parsing is redundant. C++ modules are designed to minimize the re-parsing of the same header content by providing an efficient on-disk representation of C++ code.
 
 \section{Background}
 \label{background}
 
 In this section we will explain the mechanism of three major performance optimizations in ROOT: ROOT precompiled header (PCH); rootmap file (ROOTMAP); and RDICT files. We will outline their drawbacks compared with precompiled modules (PCMs).
 
-\subsection{Existing header parsing implementation: PCH}
+\subsection{Optimizing ROOT using a PCH}
 \label{pch}
 
-The ROOT precompiled header (PCH) reduces the CPU and memory cost for ROOT’s heavily used libraries. The precompiled header technology is well-understood since decades. It is an efficient on-disk representation of the state of the compiler after parsing a set of headers. It can be loaded before starting the next instance to avoid doing redundant work. ROOT’s dictionary generator, \textit{rootcling}, creates one PCH file and build time. The PCH file is attached at ROOT startup.
+ROOT's precompiled header reduces the CPU and memory cost for ROOT’s heavily used libraries. The precompiled header technology is well-understood since decades. It is an efficient on-disk representation of the state of the compiler after parsing a set of headers. It can be loaded before starting the next instance to avoid doing redundant work. ROOT’s dictionary generator, \textit{rootcling}, generates one PCH file at build time. TODO: Reword to mention lazyness. The PCH file is attached at ROOT startup.
 
-The precompiled modules (PCM) is the file which stores header information which is used by C++ Modules infrastructure. As is shown in \ref{fig:pchandpcm}, the difference of this representation from PCH is that PCM can be created explicitly for each specific headers, with which you can define in module map files. This mechanism makes PCM separable, and in ROOT, one PCM file corresponds to one library.
+TODO: Explain that the PCH can be only one whereas the PCMs can be multiple. Then we do not need the first sentence of the next paragraph I think.
+
+A PCM file stores header information which is used by C++ Modules infrastructure. As is shown in \ref{fig:pchandpcm}, the difference of this representation from PCH is that PCM can be created explicitly for each specific header, with which you can define in module map files (TODO: Elaborate module maps). This mechanism makes PCM separable, and in ROOT, one PCM file corresponds to one library.
 
 Major drawback of PCH is the fact that if third-party users want to include their libraries, they have to recompile PCH every time any header file was changed, which becomes an expensive operation. C++ modules solve this drawback, as they are separable by design.
+
+TODO: Say that the current ROOT PCH has only subset of the ROOT components inside.
 
 \begin{figure}[!h]
   \centering
@@ -165,7 +166,7 @@ Major drawback of PCH is the fact that if third-party users want to include thei
   \label{fig:pchandpcm}
 \end{figure}
 
-\subsection{Existing performance optimization in ROOT: ROOTMAP and RDICT}
+\subsection{Optimizing third-party code by ROOTMAP and RDICT}
 \label{dictgen}
 
 ROOTMAP files reduce parsing for code which is not in the PCH. RDICT files store some useful information, particularly about class offsets in ROOT files to avoid the potentially expensive call to the interpreter if the information is not the PCH.
@@ -219,7 +220,7 @@ ROOT will locate all files with extensions {\it *.rootmap} at its startup time. 
     \label{list:prompt}
 \end{listing}
 
-Listing \ref{list:prompt} shows the efforts which ROOT does to avoid parsing redundant code. S is defined in Line \ref{line:structs} in Listing \ref{list:foo} and {\it foo::bar} is defined in Line \ref{line:foobar} in Listing \ref{list:foo}. Line \ref{line:prompt1} does not require a definition and the forward declaration consumed at the initialization time is sufficient, so the parsing of {\it Foo.h} is not required. The behavior of Line \ref{line:prompt1} in Listing \ref{list:prompt} is equivalent to Line \ref{line:line2beggining}, \ref{line:rootss} in Listing \ref{list:line2}.
+Listing \ref{list:prompt} shows the efforts which ROOT does to avoid parsing redundant code. {\it S} is defined in Line \ref{line:structs} in Listing \ref{list:foo} and {\it foo::bar} is defined in Line \ref{line:foobar} in Listing \ref{list:foo}. Line \ref{line:prompt1} does not require a definition and the forward declaration consumed at the initialization time is sufficient, so the parsing of {\it Foo.h} is not required. The behavior of Line \ref{line:prompt1} in Listing \ref{list:prompt} is equivalent to Line \ref{line:line2beggining} and \ref{line:rootss} in Listing \ref{list:line2}.
 
 \begin{listing}[h]
     \noindent
@@ -243,20 +244,22 @@ Listing \ref{list:prompt} shows the efforts which ROOT does to avoid parsing red
     \label{list:line2}
 \end{listing}
 
-Line \ref{line:prompt2} in Listing \ref{list:prompt} also does not require a definition. The second identifier lookup fails, but ROOT knows that {\it foo::bar} is in {\it libFoo} by the information from rootmap files (Line \ref{line:libfoo}). It dlopens {\it libFoo} which in turn, during its static initialization, inserts annotated forward declaration as shown in {\it G\_\_Foo.cxx}. This resolves {\it foo::bar} which avoids the parsing of {\it Foo.h} at relatively small overhead. The loading of the annotated forward declarations can happen at any time during parsing. This is so-called "recursive parsing" and is a code path that exists only in ROOT, and is not exercised by clang itself. The behavior of Line \ref{line:prompt2} is equivalent to Listing \ref{list:line2} Line \ref{line:line2beggining} to Line \ref{line:beforerestoreparsing}.
+Line \ref{line:prompt2} in Listing \ref{list:prompt} also does not require a definition. The second identifier lookup fails, but ROOT knows that {\it foo::bar} is in {\it libFoo} by the information from rootmap files (Line \ref{line:libfoo}). It dlopens {\it libFoo} which in turn, during its static initialization, inserts annotated forward declaration as shown in {\it G\_\_Foo.cxx}. This resolves {\it foo::bar} which avoids the parsing of {\it Foo.h} at relatively small overhead. The loading of the annotated forward declarations can happen at any time during parsing. This is so-called "recursive parsing" and is a code path that exists only in ROOT, and is not exercised by clang itself. The behavior of Line \ref{line:prompt2} is equivalent to Listing \ref{list:line2} Line \ref{line:line2beggining} to \ref{line:beforerestoreparsing}.
 
-Line \ref{line:prompt3} in Listing \ref{list:prompt} requires a definition and the implementation behaves exactly as in Line \ref{line:prompt2}. When a definition is required, it reads the information in the annotation and also parses {\it Foo.h} as is shown in Line \ref{line:restoreparsing} in Listing \ref{list:line2}. The Line \ref{line:prompt3} in Listing \ref{list:prompt} behavior is equivalent to Line \ref{line:line2beggining} to Line \ref{line:restoreparsing} in Listing \ref{list:line2}.
+Line \ref{line:prompt3} in Listing \ref{list:prompt} requires a definition and the implementation behaves exactly as in Line \ref{line:prompt2}. When a definition is required, it reads the information in the annotation and also parses {\it Foo.h} as is shown in Line \ref{line:restoreparsing} in Listing \ref{list:line2}. The Line \ref{line:prompt3} in Listing \ref{list:prompt} behavior is equivalent to Line \ref{line:line2beggining} to \ref{line:restoreparsing} in Listing \ref{list:line2}.
 
-To recap, ROOTMAP requires considerable maintenance and goes on an untested code path, while RDICT has a limited scope of optimization. The two features require various mechanisms to work together and there are noticeable corner cases.
+TODO: Reword/delete: To summarize, ROOTMAP requires considerable maintenance and goes on an untested code path, while RDICT has a limited scope of optimization. The two features require various mechanisms to work together and there are noticeable corner cases.
 
 \section{Implementation}
 \label{implementation}
 
-An implementation of the C++ modules concept itself exists in the LLVM frontend Clang \cite{clang-modules-doc} which is used as a library by ROOT. Clang supports the Modules TS and hosts modules research and development work. The implementation encourages incremental, bottom-up adoption of the C++ modules \cite{Smith-cppcon}. Modules implementation in Clang are designed to work for C, C++, ObjectiveC, ObjectiveC++ and Swift \cite{Moduralize-doc}. Users can enable the modules feature without modifications in header files. The LLVM compiler allows users to specify module interfaces in a dedicated file, called module maps files. A module map file expresses the mapping between a module file and a collection of header files. It can be mounted using the compiler’s virtual file system overlay mechanism to non-writable production library installations. In practice, a non-invasive modularization can be done easily by introducing a module map file. In some cases the module map files can be automatically generated if the build system knows about the list of header files in every package.
+An implementation of the C++ modules concept itself exists in the LLVM frontend Clang \cite{clang-modules-doc} which is used as a library by ROOT. Clang supports the Modules TS and hosts modules research and development work. Clang's implementation encourages incremental, bottom-up adoption of the C++ modules \cite{Smith-cppcon}. The implementation is designed to work for C, C++, ObjectiveC, ObjectiveC++ and Swift \cite{Moduralize-doc}. Users can enable the modules feature without modifications in header files. Clang allows users to specify module interfaces in a dedicated file, called module maps files. A module map file expresses the mapping between a module file and a collection of header files. It can be mounted using the compiler’s virtual file system overlay mechanism to non-writable library installation paths. In practice, a non-invasive modularization can be done easily by introducing a module map file. In some cases the module map files can be automatically generated if the build system knows about the list of header files in every package.
 
-Several steps were taken to adopt C++ modules in ROOT. First, we supported compile-time C++ modules with Clang, which compiles ROOT with modules aware Clang. It improves ROOT compilation two times, and this effort includes generating module map files and resolving cyclic header dependency inside ROOT. Next, we taught rootcling dictionary generator to generate pcm files attached with I/O information. We taught ROOT to preload all pre-generated pcm at the startup time, in order to make declaration available without \#including the appropriate headers. Also, we implemented the autoloading of libraries in ROOT which is not depending on old infrastructure (ROOTMAPS), which gives correctness benefits shown in section \ref{correctness} and is surprisingly efficient compared to ROOTMAPS. This is because we can infer the library name from the pcm name. Beyond that, we have done a large amount of performance optimization in ROOT and Clang.
+Several steps were taken to adopt C++ modules in ROOT. First, we supported compiling ROOT with C++ modules. It improved ROOT compilation two times, and this effort includes generating module map files and resolving cyclic header dependency inside ROOT. Next, we taught rootcling dictionary generator to generate PCM files attached with I/O information. We taught ROOT to preload all PCMS at the startup time, in order to make declaration available without \#including the appropriate headers. Also, we implemented the autoloading of libraries in ROOT which is not depending on old infrastructure (ROOTMAPS), which gives correctness benefits shown in section \ref{correctness} and is efficient compared to ROOTMAPS.
 
-For C++ modules adoption in experiments, we have been working closely with CMSSW team \cite{cms}. Already, ROOT can be compiled with runtime C++ in CMS environment, and we will enable pcm generation for their libraries one by one. We can gradually migrate dictionary generation to pcm, as our current implementation falls back to ROOTMAP when pcm is not generated. It enables us incremental migration from old to new infrastructure.
+%TODO: REWORD: This is because we can infer the library name from the PCM name. Beyond that, we have done a large amount of performance optimization in ROOT and Clang.
+
+For the C++ modules adoption in experiments, we have been working closely with CMSSW team \cite{cms}. ROOT can already be compiled with runtime C++ in CMS environment, and we will enable PCM generation for their libraries one by one. We can gradually migrate dictionary generation to PCM, as our current implementation falls back to ROOTMAP when a PCM is not generated. It enables us to incrementally migrate from the old to the new infrastructure.
 
 \subsection{Registration Mechanism and Automatic discovery of C++ declarations}
 \label{subsec:preloading}
@@ -274,11 +277,11 @@ For C++ modules adoption in experiments, we have been working closely with CMSSW
     \label{list:implicit-include}
 \end{listing}
 
-C++ Modules aware ROOT preloads all modules at its startup time. Listing \ref{list:prompt} becomes equivalent to Listing \ref{list:implicit-include}. Listing \ref{list:implicit-include} shows the example of implicit \#include. {\it foo::bar} can be used without even including {\it foo.h}. With modules, this feature is supported by importing all modules at the startup time, as shown in Line \ref{line:importroot} and \ref{line:importfoo}. This implementation avoids recursive actions and relies on a well-defined (by the C++ standard) behavior. Currently, this comes with a constant performance overhead which we go in details in section \ref{performance}.
+A C++ Modules aware ROOT preloads all modules at its startup time. Listing \ref{list:prompt} becomes equivalent to Listing \ref{list:implicit-include}. Listing \ref{list:implicit-include} shows the example of implicit \#include. {\it foo::bar} can be used without even including {\it foo.h}. With modules, this feature is supported by importing all modules at the startup time, as shown in Line \ref{line:importroot} and \ref{line:importfoo}. This implementation relies on a well-defined (by the C++ standard) behavior. Currently, importing all modules comes with a constant performance overhead which we explain in detail in section \ref{performance}.
 
-However, there is another way to support this feature. It is called global modules index, which makes the list of identifiers and pcms at the initialization time. Upon the identifier lookup failure, the interpreter can refer to the list to decide which pcm to load. The possible drawback of this implementation is that the interpreter has no control over where the lookup failure can happen. It can happen inside a nested scope where importing a pcm may cause an incomprehensible error.
+However, there is another way to support this feature. It is called global modules index, which makes the list of identifiers and PCMs at the initialization time. Upon the identifier lookup failure, the interpreter can refer to the list to decide which PCM to load. The possible drawback of this implementation is that the interpreter has no control over where the lookup failure can happen. It can happen inside a nested scope where importing a PCM may cause an incomprehensible error.
 
-Regarding of automatic discovery of C++ declarations, a naive implementation of this feature would require the inclusion of all reachable library descriptors (aka header files) at ROOT startup time, which is not feasible. ROOT inserts a set of optimization from ROOTMAP files to fence itself from the costly full header inclusion. Unfortunately, several of them are home-grown and in a few cases inaccurate causing a notable technical debt.
+Regarding automatic discovery of C++ declarations, a naive implementation of this feature would require the inclusion of all reachable library descriptors (aka header files) at ROOT startup time, which is not feasible. ROOT inserts a set of optimization from ROOTMAP files to fence itself from the costly full header inclusion. Unfortunately, several of them are home-grown and in a few cases inaccurate causing a notable technical debt.
 
 With runtime C++ modules, ROOT iterates through libraries found in prebuilt modules paths and LD\_LIBRARY\_PATH until it finds the definition of currently searching mangled name. It searches the library in prebuilt modules path first as it is more likely that the symbols are in ROOT related library. When it fails, the implementation fallbacks to system libraries from LD\_LIBRARY\_PATH for system library autoloading. The overhead is extremely low as it is only looking into 64 bytes hash in the library to determine whether this library likely has a definition or not, which is called bloom filter. Not only the symbols defined in regular symbol tables but also the dynamic symbols can be autoloaded as we are also checking .dynsym section where the dynamic symbols are defined. This feature is new and is not supported without C++ modules in ROOT. The benefit of this implementation can be seen in section \ref{correctness}.
 
@@ -383,15 +386,20 @@ As shown in Listing \ref{list:gMinuit}, gMinuit is an extern variable which cann
 \section{Limitations and Future work}
 \label{limitationsandfuture}
 
-Clang has a limitation in overwriting an outdated pcm file. That is, when building ROOT, modifying the source code and rebuilding might not work. ROOT picks up both modulemap files in seemingly distinct locations, which descends to relocatability issues which we have with modules in ROOT. In order to fix this problem, we need to teach Clang to overwrite outdated pcm. It is possible to work around this issue by removing all pcm files in the library folder in the build directory.
+Clang has a limitation in overwriting an outdated PCM file. That is, when building ROOT, modifying the source code and rebuilding might not work. ROOT picks up both modulemap files in seemingly distinct locations, which descends to relocatability issues which we have with modules in ROOT. In order to fix this problem, we need to teach Clang to overwrite outdated PCMs. It is possible to work around this issue by removing all PCM files in the library folder in the build directory.
+% preloading introduces conflicts
+
+% Mention that PCH is currently equal, real performance comes with CMS
 
 Also, the performance comparison with PCH is a limitation that we need to solve. The undistinguished performance of C++ modules compared to PCH is preventing us from making C++ modules default in ROOT. As noted in section \ref{implementation}, the main bottleneck is in preloading of modules. Our plan is to hunt down the constant overhead of C++ modules startup time and make the modules performance comparable to PCH.
+
+% How important is to migrate to external libraries
 
 In addition to the above limitations, our ultimate goal is to make this feature default in ROOT. For this, we will give support to experiments such as CMSSW and will continue optimizing the performance.
 
 \section{Acknowledgments}
 
-This work has been supported by an Intel Parallel Computing Center grant, by U.S. National Science Foundation grants PHY-1450377 and PHY-1624356, and by the U.S. Department of Energy, Office of Science.
+This work has been supported by an Intel Parallel Computing Center grant, by U.S. National Science Foundation grants PHY-1450377, OAC-1450377 and PHY-1624356, and by the U.S. Department of Energy, Office of Science.
 
 The authors would like to thank CERN/EP-SFT and the ROOT team in particular.
 
