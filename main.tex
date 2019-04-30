@@ -106,7 +106,7 @@ ROOT is a core HEP framework, broadly used in and outside HEP. Since HEP softwar
 \section{Introduction}
 \label{intro}
 
-The core part of ROOT is the C++ interpreter \textttt{Cling}, which is build on the top of the C++ compiler Clang. The interpreter allows users to have interactive ROOT sessions. It also serves as a backend for some of ROOT's language bindings such as ROOT Python extension module PyROOT.
+The core part of ROOT is the C++ interpreter \textttt{Cling}, which is build on the top of the C++ compiler Clang. The interpreter allows users to have interactive ROOT sessions. It also serves as a backend for ROOT's language bindings such as ROOT Python extension module PyROOT.
 
 To offer these features, Cling has to parse source code during runtime. This includes not only the code manually entered by the user from a command line, but also a multitude of the header files coming from libraries and frameworks. The header file parsing can negatively affect ROOT's performance as it consumes notable amounts of memory and CPU time.
 
